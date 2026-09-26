@@ -30,6 +30,8 @@ Each order lookup produces an `order.lookup` span and an INFO or WARN log record
 
 The **Order Tracker 5xx responses** alert rule (provisioned from `observability/grafana/provisioning/alerting/rules.yaml`) fires per endpoint when a route returns any 5xx in a 5-minute window, and clears once a window has none. Its annotations name the endpoint and window and link to the dashboard. No contact point is attached yet, so check its state under Alerting > Alert rules in Grafana. Routes with no 5xx responses stay Normal, and so does a missing metric.
 
+When the alert fires, Grafana posts it to the incident-response service, which saves the evidence and starts the coding assistant headless. See [incident-response/README.md](incident-response/README.md).
+
 All configuration lives in `observability/`: the Collector pipeline, Prometheus scrape config, Loki and Tempo settings, and Grafana's provisioned data sources and dashboard. Edit the dashboard JSON there, not in the Grafana UI, or the change is lost when the container is recreated. Telemetry data is kept in Docker volumes, and `docker compose down -v` deletes it along with the orders.
 
 ## API

@@ -76,3 +76,7 @@ def setup_telemetry(extra_metric_readers=(), extra_span_exporters=()):
     app_logger = logging.getLogger("app")
     app_logger.setLevel(logging.INFO)
     app_logger.addHandler(LoggingHandler(level=logging.INFO, logger_provider=logger_provider))
+    # Unhandled exceptions (the tracebacks behind a 500) are logged here by uvicorn.
+    logging.getLogger("uvicorn.error").addHandler(
+        LoggingHandler(level=logging.ERROR, logger_provider=logger_provider)
+    )

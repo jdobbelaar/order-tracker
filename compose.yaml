@@ -74,6 +74,9 @@ services:
       - ./observability/grafana/provisioning:/etc/grafana/provisioning:ro
       - ./observability/grafana/dashboards:/var/lib/grafana/dashboards:ro
       - grafana-data:/var/lib/grafana
+    extra_hosts:
+      # Lets the alert webhook reach the incident-response service running on the host.
+      - "host.docker.internal:host-gateway"
     depends_on:
       - prometheus
       - loki
