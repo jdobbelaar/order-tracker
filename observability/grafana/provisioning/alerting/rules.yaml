@@ -1,0 +1,58 @@
+apiVersion: 1
+
+groups:
+  - orgId: 1
+    name: order-tracker
+    folder: Order Tracker
+    interval: 1m
+    rules:
+      - uid: order-tracker-5xx
+        title: Order Tracker 5xx responses
+        # Fires per endpoint (http_route) while it returned any 5xx in the last 5 minutes.
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: prometheus
+            model:
+              refId: A
+              instant: true
+              expr: >-
+                sum by (http_route) (increase(order_tracker_http_requests_total{http_response_status_code=~"5.."}[5m]))
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              refId: B
+              type: reduce
+              expression: A
+              reducer: last
+              settings:
+                mode: dropNN
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: B
+              conditions:
+                - evaluator:
+                    type: gt
+                    params: [0]
+        # No 5xx series (or no data at all) means nothing is failing, so the rule stays Normal.
+        noDataState: OK
+        execErrState: Error
+        for: 0s
+        labels:
+          severity: critical
+        annotations:
+          summary: '5xx responses from {{ $labels.http_route }}'
+          description: >-
+            {{ $labels.http_route }} returned {{ printf "%.0f" $values.B.Value }} 5xx response(s)
+            in the last 5 minutes. The alert clears once a 5-minute window has no 5xx.
+          window: last 5 minutes
+          endpoint: '{{ $labels.http_route }}'
+          dashboard_url: '{{ externalURL }}d/order-tracker/order-tracker?orgId=1&from=now-30m&to=now'
+          __dashboardUid__: order-tracker
+          __panelId__: '7'

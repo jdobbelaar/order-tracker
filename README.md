@@ -28,6 +28,8 @@ The app emits OpenTelemetry traces, metrics, and logs. It always prints them to 
 
 Each order lookup produces an `order.lookup` span and an INFO or WARN log record that share a trace ID, so you can jump from a log line to its trace. The `order_tracker.http.requests` counter carries `http.route` and `http.response.status_code` attributes (Prometheus name `order_tracker_http_requests_total`). `/healthz` is excluded.
 
+The **Order Tracker 5xx responses** alert rule (provisioned from `observability/grafana/provisioning/alerting/rules.yaml`) fires per endpoint when a route returns any 5xx in a 5-minute window, and clears once a window has none. Its annotations name the endpoint and window and link to the dashboard. No contact point is attached yet, so check its state under Alerting > Alert rules in Grafana. Routes with no 5xx responses stay Normal, and so does a missing metric.
+
 All configuration lives in `observability/`: the Collector pipeline, Prometheus scrape config, Loki and Tempo settings, and Grafana's provisioned data sources and dashboard. Edit the dashboard JSON there, not in the Grafana UI, or the change is lost when the container is recreated. Telemetry data is kept in Docker volumes, and `docker compose down -v` deletes it along with the orders.
 
 ## API

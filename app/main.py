@@ -8,6 +8,7 @@ from uuid import uuid4
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse
+from fastapi.routing import APIRoute
 from opentelemetry import metrics, trace
 from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
 from pydantic import BaseModel, Field
@@ -84,9 +85,22 @@ class StatusUpdate(BaseModel):
     status: str
 
 
+def seed_error_counters(routes):
+    """Start the 5xx series at zero so Prometheus sees the first 500 on a route as an increase."""
+    for route in routes:
+        if isinstance(route, APIRoute) and route.path != "/healthz":
+            for method in route.methods:
+                request_counter.add(0, {
+                    "http.request.method": method,
+                    "http.route": route.path,
+                    "http.response.status_code": 500,
+                })
+
+
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
     init_db()
+    seed_error_counters(_app.routes)
     yield
 
 
