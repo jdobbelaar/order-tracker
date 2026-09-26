@@ -33,3 +33,38 @@ def test_create_and_update_order(client):
 
 def test_missing_order(client):
     assert client.get("/api/orders/missing").status_code == 404
+
+
+def request_count(metric_reader, route, status_code):
+    data = metric_reader.get_metrics_data()
+    total = 0
+    for resource_metrics in data.resource_metrics if data else []:
+        for scope_metrics in resource_metrics.scope_metrics:
+            for metric in scope_metrics.metrics:
+                if metric.name != "order_tracker.http.requests":
+                    continue
+                for point in metric.data.data_points:
+                    attributes = point.attributes
+                    if (attributes["http.route"] == route
+                            and attributes["http.response.status_code"] == status_code):
+                        total += point.value
+    return total
+
+
+def test_lookup_metric_has_route_and_status_code(client, metric_reader):
+    found_before = request_count(metric_reader, "/api/orders/{order_id}", 200)
+    missing_before = request_count(metric_reader, "/api/orders/{order_id}", 404)
+    order_id = client.get("/api/orders").json()[0]["id"]
+    client.get(f"/api/orders/{order_id}")
+    client.get("/api/orders/missing")
+    assert request_count(metric_reader, "/api/orders/{order_id}", 200) == found_before + 1
+    assert request_count(metric_reader, "/api/orders/{order_id}", 404) == missing_before + 1
+
+
+def test_lookup_emits_span(client, span_exporter):
+    span_exporter.clear()
+    client.get("/api/orders/missing")
+    lookup = [s for s in span_exporter.get_finished_spans() if s.name == "order.lookup"]
+    assert len(lookup) == 1
+    assert lookup[0].attributes["order.id"] == "missing"
+    assert lookup[0].attributes["order.found"] is False

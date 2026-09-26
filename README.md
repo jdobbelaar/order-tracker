@@ -22,6 +22,10 @@ ORDER_TRACKER_PORT=18080 docker compose up --build -d --wait
 
 Run tests with `uv run --frozen pytest -q`. Stop the app with `docker compose down`. Add `-v` only if you also want to delete the order data.
 
+## Telemetry
+
+The app emits OpenTelemetry traces, metrics, and logs to the console, so read them with `docker compose logs app`. Each order lookup produces an `order.lookup` span and an INFO or WARN log record that share a trace ID. The `order_tracker.http.requests` counter carries `http.route` and `http.response.status_code` attributes, and metrics print every 10 seconds (`OTEL_METRIC_EXPORT_INTERVAL` in `compose.yaml`). `/healthz` is excluded.
+
 ## API
 
 | Method | Path | Purpose |
