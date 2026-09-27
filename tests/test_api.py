@@ -68,3 +68,15 @@ def test_lookup_emits_span(client, span_exporter):
     assert len(lookup) == 1
     assert lookup[0].attributes["order.id"] == "missing"
     assert lookup[0].attributes["order.found"] is False
+
+
+def test_express_order_placed_at_month_end(client):
+    response = client.get("/api/orders")
+    orders = response.json()
+    express_orders = [o for o in orders if o["priority"] == "express"]
+    assert len(express_orders) > 0
+    for order in express_orders:
+        response = client.get(f"/api/orders/{order['id']}")
+        assert response.status_code == 200
+        order_data = response.json()
+        assert "estimated_delivery" in order_data
