@@ -69,6 +69,8 @@ services:
       GF_AUTH_DISABLE_LOGIN_FORM: "true"
       # Used for links in alert annotations.
       GF_SERVER_ROOT_URL: http://127.0.0.1:${GRAFANA_PORT:-3000}/
+      # Bearer token for the incident-response webhook; set it in .env.
+      INCIDENT_WEBHOOK_TOKEN: ${INCIDENT_WEBHOOK_TOKEN:-}
       GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH: /var/lib/grafana/dashboards/order-tracker.json
     volumes:
       - ./observability/grafana/provisioning:/etc/grafana/provisioning:ro

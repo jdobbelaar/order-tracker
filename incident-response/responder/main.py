@@ -1,4 +1,5 @@
 import asyncio
+import hmac
 import json
 import logging
 import re
@@ -7,9 +8,10 @@ from datetime import datetime, timedelta, timezone
 
 from fastapi import FastAPI, HTTPException, Request
 
-from responder.assistant import build_prompt, run_assistant
+from responder.assistant import build_prompt, parse_output, run_assistant
 from responder.config import Settings
 from responder.evidence import collect
+from responder.fix import create_worktree, describe_fix
 
 logger = logging.getLogger("responder")
 
@@ -40,16 +42,25 @@ async def investigate(settings, incident_dir, transport):
         start = datetime.fromisoformat(incident["window_start"])
         end = datetime.now(timezone.utc) + timedelta(minutes=1)
         summary = await collect(settings, incident["alert"], start, end, incident_dir, transport)
-        incident = _update(incident_dir, status="evidence_collected", evidence=summary)
-        prompt = build_prompt(incident, incident_dir, settings.repo_dir)
+        worktree = await create_worktree(settings, incident_dir, incident["id"])
+        incident = _update(incident_dir, status="evidence_collected", evidence=summary, worktree=worktree)
+        prompt = build_prompt(incident, incident_dir.resolve(), worktree)
         (incident_dir / "prompt.md").write_text(prompt, encoding="utf-8")
         _update(incident_dir, status="assistant_running")
-        code = await run_assistant(
-            settings.assistant_command, prompt, settings.repo_dir,
-            incident_dir / "report.md", incident_dir / "assistant.stderr.log",
+        code, stdout = await run_assistant(
+            settings.assistant_command, prompt, worktree["path"],
+            incident_dir / "assistant.stderr.log", incident_dir.resolve(), settings.max_budget_usd,
         )
-        _update(incident_dir, status="assistant_done" if code == 0 else "assistant_failed",
-                assistant_exit_code=code)
+        report, usage = parse_output(stdout)
+        (incident_dir / "report.md").write_text(report, encoding="utf-8")
+        fix, diff = await describe_fix(worktree)
+        if diff:
+            (incident_dir / "fix.diff").write_text(diff + "\n", encoding="utf-8")
+        if code != 0 or usage.get("is_error"):
+            status = "assistant_failed"
+        else:
+            status = "fix_committed" if fix["commits"] else "no_fix"
+        _update(incident_dir, status=status, assistant_exit_code=code, assistant=usage, fix=fix)
     except Exception as error:  # noqa: BLE001 - keep the failure with the incident
         logger.exception("Investigation failed for %s", incident_dir.name)
         _update(incident_dir, status="failed", error=f"{type(error).__name__}: {error}")
@@ -67,6 +78,12 @@ def create_app(settings=None, transport=None):
 
     @app.post("/alerts", status_code=202)
     async def receive_alerts(request: Request):
+        # This endpoint starts an assistant that can edit code, so only Grafana (which holds the
+        # token) may call it. An unset token rejects everything.
+        expected = f"Bearer {settings.webhook_token}"
+        given = request.headers.get("authorization", "")
+        if not settings.webhook_token or not hmac.compare_digest(given.encode(), expected.encode()):
+            raise HTTPException(401, "Missing or invalid bearer token")
         try:
             payload = await request.json()
         except ValueError:

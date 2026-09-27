@@ -10,6 +10,10 @@ contactPoints:
           # The incident-response service runs on the host (port 8001), not in Compose.
           url: http://host.docker.internal:8001/alerts
           httpMethod: POST
+          # The service refuses requests without this token. It comes from INCIDENT_WEBHOOK_TOKEN
+          # in the repository's .env file (see incident-response/README.md).
+          authorization_scheme: Bearer
+          authorization_credentials: $INCIDENT_WEBHOOK_TOKEN
 
 policies:
   - orgId: 1
